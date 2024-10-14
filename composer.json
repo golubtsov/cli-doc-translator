@@ -1,0 +1,38 @@
+{
+    "name": "nigo/cli-doc-translator",
+    "type": "project",
+    "require": {
+        "php": "^8.2.0",
+        "laravel-zero/framework": "^11.0.0",
+        "nigo/parallel-doc": "dev-master",
+        "nigo/simple-libre-translator": "dev-master",
+        "nunomaduro/laravel-console-menu": "^3.5",
+        "nunomaduro/laravel-desktop-notifier": "^2.8"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.15.2",
+        "mockery/mockery": "^1.6.11",
+        "pestphp/pest": "^2.34.7"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "optimize-autoloader": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "bin": ["translator"]
+}
