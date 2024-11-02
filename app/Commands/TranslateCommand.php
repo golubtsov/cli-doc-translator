@@ -3,13 +3,13 @@
 namespace App\Commands;
 
 use LaravelZero\Framework\Commands\Command;
-use Nigo\Doc\DocParallelDoc;
-use Nigo\Doc\ParallelDocInterface;
-use Nigo\Doc\TxtParallelDoc;
+use Nigo\Doc\ParallelDoc;
+use Nigo\Doc\TxtMarkupFormatter;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Contracts\HttpClient\Exception\ClientExceptionInterface;
 use Symfony\Contracts\HttpClient\Exception\RedirectionExceptionInterface;
 use Symfony\Contracts\HttpClient\Exception\ServerExceptionInterface;
+use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 
 /**
  * @method notify(string $string, string $string1)
@@ -18,12 +18,10 @@ use Symfony\Contracts\HttpClient\Exception\ServerExceptionInterface;
 class TranslateCommand extends Command
 {
     protected $signature = 'translate {pathToFile?}';
-
     protected $description = 'Translate text';
 
     private string $path;
-
-    private string $parallelDocType;
+    private string $markup;
 
     protected function configure(): void
     {
@@ -38,112 +36,106 @@ class TranslateCommand extends Command
     /**
      * @throws RedirectionExceptionInterface
      * @throws ClientExceptionInterface
-     * @throws ServerExceptionInterface
+     * @throws ServerExceptionInterface|TransportExceptionInterface
      */
     public function handle(): void
     {
         $this->path = env('DEFAULT_FOLDER', '/');
-
-        $type = $this->menu(
-            'How save file',
-            [
-                TxtParallelDoc::class => 'txt',
-                DocParallelDoc::class => 'doc',
-            ]
-        )->open();
-
-        if (is_null($type)) exit();
-
-        $this->parallelDocType = $type;
-
+        $this->markup = $this->selectMarkupFormat();
 
         if (is_null($this->argument('pathToFile'))) {
-            $this->getFile();
+            $this->path = $this->selectFile();
+        } else {
+            $this->path = $this->argument('pathToFile');
         }
 
-        $path = $this->argument('pathToFile') ?? $this->path;
+        $result = $this->translate($this->path);
 
-        $result = $this->translate($path);
-
-        if (FALSE === $result) {
+        if ($result === false) {
             $this->error('Some error');
-
-            $this->notify(
-                'Error',
-                'Some error'
-            );
+            $this->notify('Error', 'Some error');
             exit();
         }
 
         $this->info('Path to file - ' . $result);
-
-        $this->notify(
-            'Translator',
-            'The file translated!' . PHP_EOL . $result
-        );
+        $this->notify('Translator', 'The file translated!' . PHP_EOL . $result);
     }
 
-    private function getFile(): void
+    private function selectMarkupFormat(): string
     {
-        $folders = scandir($this->path);
+        $markup = $this->menu(
+            'How save file',
+            [
+                'txt' => 'txt',
+                'doc' => 'doc',
+            ]
+        )->open();
 
-        if (!$this->option('hidden')) {
-            $folders = $this->getOnlyPublicFolders($folders);
+        if (is_null($markup)) {
+            exit();
         }
 
-        $option = $this->menu('Folders', $folders)->open();
+        return $markup;
+    }
 
-        if (is_null($option)) exit();
+    private function selectFile(): string
+    {
+        while (true) {
+            $folders = scandir($this->path);
+            $folders = $this->filterFolders($folders);
 
-        $this->path .= '/' . $folders[$option];
+            $option = $this->menu('Folders', $folders)->open();
+            if (is_null($option)) {
+                exit();
+            }
 
-        if (is_file($this->path)) {
-            $folders = explode('/', $this->path);
+            $this->path .= '/' . $folders[$option];
 
-            $file = $folders[array_key_last($folders)];
+            if (is_file($this->path)) {
+                $this->validateFileFormat($this->path);
+                break;
+            }
 
-            $explodeFile = explode('.', $file);
-
-            $format = $explodeFile[array_key_last($explodeFile)];
-
-            if ($format !== 'txt') {
-                $this->warn('File must be a TXT format');
+            if (!is_dir($this->path)) {
+                $this->warn('Selected path is not a directory or file.');
                 exit();
             }
         }
 
-        if (is_dir($this->path)) {
-            $this->getFile();
-        }
+        return $this->path;
     }
 
-    private function getOnlyPublicFolders(array $folders): array
+    private function filterFolders(array $folders): array
     {
-        return array_merge(
-            [
-                '.',
-                '..',
-            ],
-            array_values(
-                array_filter(
-                    $folders,
-                    function (string $folder) {
-                        return $folder[0] !== '.';
-                    }
-                )
-            )
-        );
+        if (!$this->option('hidden')) {
+            $folders = array_filter($folders, fn($folder) => $folder[0] !== '.');
+        }
+
+        return array_values($folders);
+    }
+
+    private function validateFileFormat(string $path): void
+    {
+        $format = pathinfo($path, PATHINFO_EXTENSION);
+        if ($format !== 'txt') {
+            $this->warn('File must be a TXT format');
+            exit();
+        }
     }
 
     /**
      * @throws RedirectionExceptionInterface
      * @throws ClientExceptionInterface
-     * @throws ServerExceptionInterface
+     * @throws ServerExceptionInterface|TransportExceptionInterface
      */
     private function translate(string $path): string|false
     {
-        /** @var ParallelDocInterface $txtParallelDoc */
-        $txtParallelDoc = new $this->parallelDocType('ru');
-        return $txtParallelDoc->generate($path);
+        $parallelDoc = new ParallelDoc(
+            'ru',
+            $this->markup,
+            app(TxtMarkupFormatter::class)
+        );
+
+        return $parallelDoc->generate($path);
     }
 }
