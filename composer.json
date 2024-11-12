@@ -24,6 +24,12 @@
             "Tests\\": "tests/"
         }
     },
+    "scripts": {
+        "build": [
+            "php translator app:build",
+            "bash -c 'if [ -f .env ]; then cp .env ./builds/.env; fi'"
+        ]
+    },
     "config": {
         "preferred-install": "dist",
         "sort-packages": true,
@@ -34,5 +40,7 @@
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
-    "bin": ["translator"]
+    "bin": [
+        "translator"
+    ]
 }
